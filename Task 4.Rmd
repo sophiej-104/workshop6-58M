@@ -54,3 +54,56 @@ tsol <- tsol %>%
 
 
 ```
+
+```{r pca}
+
+
+```
+
+```{r tSNE}
+
+
+
+```
+
+```{r lda}
+# create training and testing datasets
+
+ids <- createDataPartition(y = tsol$lineage,
+                           p = 0.75,
+                           list = FALSE)
+
+# Training set
+
+train <- tsol %>% slice(ids)
+
+# Testing set
+
+test <- tsol %>% slice(-ids)
+
+# Performing the LDA on the training data:
+
+lda <- train %>%
+  select(-c(lineage, rep)) %>%
+  MASS::lda(grouping = train$lineage)
+
+# Predict on the training data
+
+plda_train <- train %>%
+  select(-c(lineage, rep)) %>%
+  predict(object = lda)
+
+# Examining the Confusion Matrix 
+
+confusionMatrix(plda_train$class, factor(train$lineage))
+
+# Predict classes of the test data
+
+plda_test <- test %>%
+  select(-c(lineage, rep)) %>%
+  predict(object = lda)
+
+confusionMatrix(plda_test$class, factor(test$lineage))
+
+```
+
