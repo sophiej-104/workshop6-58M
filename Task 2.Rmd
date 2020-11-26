@@ -1,0 +1,168 @@
+---
+title: "Task 2"
+author: "Sophie Davies"
+date: "26/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      warning = FALSE,
+                      message = FALSE,
+                      fig.retina = 3)
+```
+
+```{r loading packages}
+library(tidyverse)
+library(GGally)
+library(Rtsne)
+library(caret)
+```
+
+<!-- Workshop Task Description -->
+
+<!-- The Wheat Seeds Dataset contains measurements of seed kernels from different varieties of wheat: Kama (1), Rosa (2) and Canadian (3). High quality visualization of the internal kernel structure was detected using a soft X-ray technique and 7 measurements were taken which are in this order in the file: -->
+
+<!-- Area. -->
+<!-- Perimeter. -->
+<!-- Compactness -->
+<!-- Length of kernel. -->
+<!-- Width of kernel. -->
+<!-- Asymmetry coefficient. -->
+<!-- Length of kernel groove. -->
+<!-- Investigate whether these variables might be useful to classify the species. -->
+
+```{r reading in the data}
+wheat <- read.table("data-raw/seeds_dataset.txt") 
+```
+
+```{r organising the data}
+# Adding column names
+
+colnames(wheat) <- c("Area", "Perimeter", "Compactness", "Length of kernel", "Width of kernel", "Asymmetry coefficient", "Length of kernel groove", "Variety")
+
+# Cleaning the column names and adding a column for names of the variety
+
+wheat_tidy <- wheat %>%
+  janitor::clean_names() %>%
+  mutate(variety_name = ifelse(variety == "1", "Kama",
+         ifelse(variety == "2", "Rosa",
+         ifelse(variety == "3", "Canadian", "NA"))))
+
+```
+
+```{r exploring the data}
+
+wheat_summary <- wheat_tidy %>%
+  select(1:7) %>%
+  summary()
+
+wheat_summary 
+# No NAs
+
+wheat_tidy %>%
+  select(-8) %>%
+  ggpairs(aes(color = variety_name))
+
+```
+
+```{r pca}
+
+pca <- wheat_tidy %>%
+  select(-c(8:9)) %>%
+  prcomp(scale. = TRUE)
+
+summary(pca)
+
+pca$rotation
+
+pca_labelled <- data.frame(pca$x, variety_name = wheat_tidy$variety_name)
+
+pca_labelled %>% 
+  ggplot(aes(x = PC1, y = PC2, color = variety_name)) +
+  geom_point()
+```
+
+```{r tSNE}
+tsne <- wheat_tidy %>% 
+  select(-8:9) %>%
+  Rtsne(perplexity = 40,
+        check_duplicates = FALSE)
+
+dat <- data.frame(tsne$Y)
+dat %>% ggplot(aes(x = X1, y = X2)) +
+  geom_point(size=0.5)
+
+dat <- data.frame(dat, variety_name = wheat_tidy$variety_name)
+dat %>% ggplot(aes(x = X1, y = X2, colour = variety_name)) +
+  geom_point(size = 0.5)
+```
+
+# Exploring LDA
+
+```{r LDA}
+# create training and testing datasets
+
+ids <- createDataPartition(y = wheat_tidy$variety_name,
+                           p = 0.75,
+                           list = FALSE)
+
+# Training set
+
+train <- wheat_tidy %>% slice(ids)
+
+# Testing set
+
+test <- wheat_tidy %>% slice(-ids)
+
+# Performing the LDA on the training data:
+
+lda <- train %>%
+  select(1:7) %>%
+  MASS::lda(grouping = train$variety_name)
+
+# Predict on the training data
+
+plda_train <- train %>%
+  select(1:7) %>%
+  predict(object = lda)
+
+# Examining the Confusion Matrix 
+
+confusionMatrix(plda_train$class, factor(train$variety_name))
+
+# Predict classes of the test data
+
+plda_test <- test %>%
+  select(1:7) %>%
+  predict(object = lda)
+
+confusionMatrix(plda_test$class, factor(test$variety_name))
+
+```
+
+```{r plotting lda}
+
+# Extract the scores from training set
+
+lda_labelled_train <- data.frame(plda_train$x,
+                                 variety_name = train$variety_name)
+
+# Extract the scores for test set
+
+lda_labelled_test <- data.frame(plda_test$x, 
+                                variety_name = test$variety_name)
+
+# Creating scatter plots
+
+lda_labelled_train %>% 
+  ggplot(aes(x = LD1, y = LD2, color = variety_name)) +
+  geom_point()
+
+# There is only to LD1 and LD2 (GGally not needed to see pairwise comparisons)
+
+lda_labelled_test %>% 
+  ggplot(aes(x = LD1, y = LD2, color = variety_name)) +
+  geom_point()
+
+```
